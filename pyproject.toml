@@ -1,15 +1,22 @@
 [project]
 name = "fastapi-magic-dto"
 version = "0.1.0"
-description = "Add your description here"
+description = "Stop duplicating your Pydantic schemas. Map FastAPI request parameters into a single DTO."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
-    "fastapi>=0.135.1",
-    "pydantic>=2.12.5",
+    "fastapi>=0.100.0",
+    "pydantic>=2.0.0"
 ]
+license = { text = "MIT" }
+
 
 [dependency-groups]
 dev = [
     "uvicorn>=0.41.0",
 ]
+
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

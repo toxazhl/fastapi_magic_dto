@@ -26,7 +26,33 @@ class UpdateUserDTO(BaseModel):
     user_id: int = Path(...)  # 🔴 Domain now depends on FastAPI!
     name: str = Body(...)
 ```
+### ❌ Another Bad Approach (Duplication & Manual Repacking)
+To keep the Domain DTO clean, you are forced to create a separate "Body" schema just for FastAPI, and then manually unpack and repack the data in every single endpoint. This leads to massive code duplication and boilerplate.
 
+```python
+from fastapi import Path, Body
+from pydantic import BaseModel
+
+# 🔴 1. Fake schema just to please FastAPI
+class UpdateUserBody(BaseModel):
+    name: str
+
+# 2. Pure Application DTO
+class UpdateUserDTO(BaseModel):
+    user_id: int
+    name: str
+
+@app.put("/users/{user_id}")
+async def update_user(
+    user_id: int = Path(...),
+    body: UpdateUserBody = Body(...)
+):
+    # 🔴 3. Ugly manual repacking everywhere!
+    data = UpdateUserDTO(user_id=user_id, **body.model_dump())
+    
+    # Now pass `data` to your interactor...
+    return await interactor(data)
+```
 ## ✨ The Solution
 
 `fastapi-magic-dto` allows you to write a **pure** Pydantic DTO (or standard Dataclass), and use an elegant type hint at the Router level to tell FastAPI exactly where to find the data.

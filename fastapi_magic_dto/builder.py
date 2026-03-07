@@ -10,26 +10,6 @@ from .markers import FieldMarker
 
 T = TypeVar("T")
 
-_MAGIC_DTO_DOCSTRING = """
-A type hint and dependency injector for FastAPI that aggregates Request data 
-(Path, Query, Header, Cookie, Body) into a single Pydantic model.
-
-Example:
---------
-```python
-class MyDTO(BaseModel):
-    item_id: int      # From Path
-    limit: int = 10   # From Query
-    name: str         # From Body
-
-@app.post("/items/{item_id}")
-async def create_item(
-    data: MagicDTO[MyDTO, P.item_id, Q.limit]
-):
-    ...
-```
-"""
-
 
 def _unwrap_optional(annotation: Any) -> Any:
     """Removes `Optional` (or `| None`) from the type annotation to prevent OpenAPI duplicate nulls."""
@@ -79,7 +59,7 @@ def _get_fields_info(dto_class: Type[T]) -> Dict[str, Dict[str, Any]]:
             }
     else:
         raise TypeError(
-            "БЛЯТЬ! MagicDTO only supports Pydantic BaseModel or standard @dataclass!"
+            "MagicDTO only supports Pydantic BaseModel or standard @dataclass!"
         )
 
     return fields_info
@@ -140,18 +120,31 @@ def _build_dependency(dto_class: Type[T], markers: List[FieldMarker]) -> Any:
 
 
 if typing.TYPE_CHECKING:
-
-    class _MagicDTOType:
-        __doc__ = _MAGIC_DTO_DOCSTRING
-
-        def __class_getitem__(cls, item: Any) -> Any: ...
-
     MagicDTO = Annotated
 else:
 
     class _MagicDTOMeta:
-        __doc__ = _MAGIC_DTO_DOCSTRING
+        __doc__ = """
+        A type hint and dependency injector for FastAPI that aggregates Request data 
+        (Path, Query, Header, Cookie, Body) into a single Pydantic model.
 
+        Example:
+        --------
+        ```python
+        class MyDTO(BaseModel):
+            item_id: int      # From Path
+            limit: int = 10   # From Query
+            name: str         # From Body
+
+        @app.post("/items/{item_id}")
+        async def create_item(
+            data: MagicDTO[MyDTO, P.item_id, Q.limit]
+        ):
+            ...
+        ```
+        """
+
+        @classmethod
         def __class_getitem__(cls, params: Any) -> Any:
             if not isinstance(params, tuple) or len(params) < 2:
                 raise TypeError(

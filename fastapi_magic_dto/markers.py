@@ -15,24 +15,22 @@ class FieldMarker:
         self.name = name
 
 
-_MARKER_DOCSTRING = """
-Dynamic marker builder for FastAPI Magic DTO.
-Use this to specify where a field should be extracted from.
-
-Available markers:
-- `P`: Path parameters
-- `Q`: Query parameters
-- `H`: Header parameters
-- `C`: Cookie parameters
-
-Example:
-    `MagicDTO[MyDTO, P.item_id, Q.limit, H.user_agent, C.session]`
-"""
-
 if typing.TYPE_CHECKING:
 
     class _DummyMarkerBuilder:
-        __doc__ = _MARKER_DOCSTRING
+        __doc__ = """
+            Dynamic marker builder for FastAPI Magic DTO.
+            Use this to specify where a field should be extracted from.
+
+            Available markers:
+            - `P`: Path parameters
+            - `Q`: Query parameters
+            - `H`: Header parameters
+            - `C`: Cookie parameters
+
+            Example:
+                `MagicDTO[MyDTO, P.item_id, Q.limit, H.user_agent, C.session]`
+            """
 
         def __getattr__(self, item: str) -> Any: ...
 
@@ -44,7 +42,6 @@ else:
 
     class _MarkerBuilder:
         __slots__ = ("location",)
-        __doc__ = _MARKER_DOCSTRING
 
         def __init__(self, location: str) -> None:
             self.location = location

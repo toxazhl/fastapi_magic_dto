@@ -104,7 +104,7 @@ The library provides 4 intuitive markers to define the origin of your fields:
 
 *Note: Any field in your DTO that is **not** explicitly marked will automatically be extracted from the JSON Request Body.*
 
-## 📖 Complete Example (The Frankenstein)
+## 📖 Complete Example
 
 You can extract data from everywhere simultaneously into a single DTO.
 

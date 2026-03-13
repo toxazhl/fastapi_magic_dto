@@ -72,6 +72,12 @@ def _build_dependency(dto_class: Type[T], markers: List[FieldMarker]) -> Any:
     marker_map = {m.name: m.location for m in markers}
     fields_info = _get_fields_info(dto_class)
 
+    for marker_name in marker_map:
+        if marker_name not in fields_info:
+            raise ValueError(
+                f"Field marker '{marker_name}' not found in {dto_class.__name__}!"
+            )
+
     for name, info in fields_info.items():
         if name in marker_map:
             location = marker_map[name]

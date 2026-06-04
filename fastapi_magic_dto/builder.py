@@ -22,6 +22,56 @@ def _unwrap_optional(annotation: Any) -> Any:
     return annotation
 
 
+# Constraint attributes carried on Pydantic / annotated-types metadata objects that map
+# 1:1 onto the validation keyword arguments accepted by FastAPI's Query/Path/Header/Cookie.
+# annotated-types exposes ge/gt/le/lt/multiple_of/min_length/max_length on its own classes;
+# Pydantic packs pattern/max_digits/decimal_places/allow_inf_nan into a single
+# _PydanticGeneralMetadata object — getattr finds them on either.
+# NOTE: ``strict`` is intentionally excluded — Path/Query/Header/Cookie values arrive as
+# strings and rely on coercion, so strict mode would reject e.g. "50" for an int param.
+_CONSTRAINT_ATTRS = (
+    "gt",
+    "ge",
+    "lt",
+    "le",
+    "min_length",
+    "max_length",
+    "multiple_of",
+    "pattern",
+    "max_digits",
+    "decimal_places",
+    "allow_inf_nan",
+)
+
+
+def _constraints_to_kwargs(metadata: List[Any]) -> Dict[str, Any]:
+    """Extract a Pydantic field's constraints into FastAPI param kwargs.
+
+    Pydantic keeps constraints (``ge``/``le``/``max_length``/...) in ``FieldInfo.metadata`` as
+    ``annotated_types`` objects, not on the bare type. They must be passed to ``Query``/``Path``
+    so FastAPI validates them at the request level — otherwise they are only enforced when the
+    DTO is instantiated inside the dependency, raising a ``pydantic.ValidationError`` that never
+    becomes a ``RequestValidationError`` and so surfaces as a 500 instead of a 422. (FastAPI does
+    not merge ``Annotated`` constraint metadata with a separate ``Query(...)`` default, so the
+    values have to be lifted out explicitly.)
+    """
+    kwargs: Dict[str, Any] = {}
+    for meta in metadata:
+        for attr in _CONSTRAINT_ATTRS:
+            value = getattr(meta, attr, None)
+            if value is not None:
+                kwargs[attr] = value
+    return kwargs
+
+
+def _apply_constraints(annotation: Any, metadata: List[Any]) -> Any:
+    """Fold constraint metadata back into the type via ``Annotated`` (used for body fields,
+    which are validated through a generated Pydantic model that reads ``Annotated`` natively)."""
+    if not metadata:
+        return annotation
+    return Annotated[tuple([annotation, *metadata])]
+
+
 def _get_fields_info(dto_class: Type[T]) -> Dict[str, Dict[str, Any]]:
     """
     Normalizes field extraction for both Pydantic BaseModels and standard Dataclasses.
@@ -35,6 +85,7 @@ def _get_fields_info(dto_class: Type[T]) -> Dict[str, Dict[str, Any]]:
                 "default": ... if field.is_required() else field.default,
                 "is_required": field.is_required(),
                 "description": field.description or "",
+                "metadata": list(field.metadata),
             }
     elif dataclasses.is_dataclass(dto_class):
         for f in dataclasses.fields(dto_class):
@@ -56,6 +107,7 @@ def _get_fields_info(dto_class: Type[T]) -> Dict[str, Dict[str, Any]]:
                 "default": default_val,
                 "is_required": is_req,
                 "description": "",  # Dataclasses don't natively support field descriptions
+                "metadata": [],  # constraints, if any, already live in the Annotated type
             }
     else:
         raise TypeError(
@@ -83,15 +135,16 @@ def _build_dependency(dto_class: Type[T], markers: List[FieldMarker]) -> Any:
             location = marker_map[name]
             default_val = info["default"]
             description = info["description"]
+            constraints = _constraints_to_kwargs(info["metadata"])
 
             if location == "path":
-                param_default = Path(..., description=description)
+                param_default = Path(..., description=description, **constraints)
             elif location == "query":
-                param_default = Query(default_val, description=description)
+                param_default = Query(default_val, description=description, **constraints)
             elif location == "header":
-                param_default = Header(default_val, description=description)
+                param_default = Header(default_val, description=description, **constraints)
             elif location == "cookie":
-                param_default = Cookie(default_val, description=description)
+                param_default = Cookie(default_val, description=description, **constraints)
             else:
                 raise ValueError(f"Unknown parameter location: {location}")
 
@@ -103,7 +156,10 @@ def _build_dependency(dto_class: Type[T], markers: List[FieldMarker]) -> Any:
             )
             sig_params.append(param)
         else:
-            body_fields[name] = (info["annotation"], info["default"])
+            body_fields[name] = (
+                _apply_constraints(info["annotation"], info["metadata"]),
+                info["default"],
+            )
 
     if body_fields:
         body_model = create_model(f"{dto_class.__name__}Body", **body_fields)
